@@ -1,0 +1,70 @@
+# =========================
+# Python
+# =========================
+
+__pycache__/
+*.py[cod]
+*.pyo
+
+*.egg-info/
+.pytest_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+chrono_env/
+
+
+# =========================
+# OS
+# =========================
+
+.DS_Store
+
+
+# =========================
+# Models
+# =========================
+
+*.pt
+*.pth
+*.onnx
+*.keras
+
+
+# =========================
+# Data
+# =========================
+
+data/dataset/
+data/videos/
+data/uploaded_videos/
+
+data/frames/
+data/tracks/
+data/detections/
+
+data/memory/
+data/graphs/
+data/events/
+
+data/vector_store/
+
+data/database/
+*.db
+
+
+# =========================
+# Generated Results
+# =========================
+
+data/results/
+data/evaluation/
+
+
+# =========================
+# Logs
+# =========================
+
+*.log
