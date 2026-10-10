@@ -1,0 +1,33 @@
+{
+  "video_id": "VID_PHASEA001",
+  "keyframe_count": 3,
+  "keyframes": [
+    {
+      "frame_id": "F00001",
+      "video_id": "VID_PHASEA001",
+      "frame_number": 0,
+      "timestamp": 0.0,
+      "path": "/Users/yashasyaaggarwal/Desktop/Minpro/data/frames/VID_PHASEA001/F00001.jpg",
+      "is_keyframe": true,
+      "scene_id": "S0001"
+    },
+    {
+      "frame_id": "F00031",
+      "video_id": "VID_PHASEA001",
+      "frame_number": 450,
+      "timestamp": 15.0,
+      "path": "/Users/yashasyaaggarwal/Desktop/Minpro/data/frames/VID_PHASEA001/F00031.jpg",
+      "is_keyframe": true,
+      "scene_id": "S0001"
+    },
+    {
+      "frame_id": "F00060",
+      "video_id": "VID_PHASEA001",
+      "frame_number": 885,
+      "timestamp": 29.5,
+      "path": "/Users/yashasyaaggarwal/Desktop/Minpro/data/frames/VID_PHASEA001/F00060.jpg",
+      "is_keyframe": true,
+      "scene_id": "S0001"
+    }
+  ]
+}

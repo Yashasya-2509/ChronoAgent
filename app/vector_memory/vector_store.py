@@ -1,19 +1,27 @@
 from pathlib import Path
-import chromadb
+
+from langchain_chroma import Chroma
+from langchain_huggingface import HuggingFaceEmbeddings
+
+
+
 
 
 class VectorStore:
 
-    def __init__(
-        self,
-        persist_directory="data/vector_store",
-        collection_name="chronoagent_events",
-        batch_size=5000
-    ):
+
+
+    def __init__(self):
+
+
+        print("[VECTOR] Initializing Chroma RAG store")
+
+
 
         self.persist_directory = Path(
-            persist_directory
+            "data/chroma_db"
         )
+
 
         self.persist_directory.mkdir(
             parents=True,
@@ -21,198 +29,172 @@ class VectorStore:
         )
 
 
-        self.batch_size = batch_size
+
+        # ============================
+        # EMBEDDING MODEL
+        # ============================
+
+
+        self.embedding_model = HuggingFaceEmbeddings(
+
+            model_name=
+            "sentence-transformers/all-MiniLM-L6-v2"
+
+        )
+
+
+
+        # ============================
+        # CHROMA DATABASE
+        # ============================
+
+
+        self.db = Chroma(
+
+            persist_directory=
+            str(self.persist_directory),
+
+
+            embedding_function=
+            self.embedding_model,
+
+
+            collection_name=
+            "chronoagent_memory"
+
+        )
+
 
 
         print(
-            f"[VECTOR] Database: {self.persist_directory}"
-        )
-
-
-        self.client = chromadb.PersistentClient(
-            path=str(self.persist_directory)
-        )
-
-
-        self.collection = (
-            self.client.get_or_create_collection(
-                name=collection_name,
-                metadata={
-                    "description":
-                    "ChronoAgent event semantic memory"
-                }
-            )
-        )
-
-
-        print(
-            "[VECTOR] Collection ready."
+            "[VECTOR] Chroma database ready"
         )
 
 
 
-    # =====================================================
-    # SINGLE MEMORY
-    # =====================================================
 
-    def add_memory(
-        self,
-        memory,
-        embedding
-    ):
-
-
-        self.collection.upsert(
-
-            ids=[
-                memory["memory_id"]
-            ],
-
-            embeddings=[
-                embedding.tolist()
-            ],
-
-            documents=[
-                memory["description"]
-            ],
-
-            metadatas=[
-                self.create_metadata(memory)
-            ]
-
-        )
 
 
 
     # =====================================================
-    # CREATE METADATA
+    # ADD MEMORIES
     # =====================================================
 
-    def create_metadata(
-        self,
-        memory
-    ):
-
-
-        return {
-
-            "video_id":
-                memory["video_id"],
-
-            "event_id":
-                memory["event_id"],
-
-            "event_type":
-                memory["event_type"],
-
-            "track_id":
-                str(memory["track_id"]),
-
-            "class_name":
-                str(memory["class_name"]),
-
-            "start_time":
-                float(memory["start_time"]),
-
-            "end_time":
-                float(memory["end_time"]),
-
-            "start_frame":
-                str(memory["start_frame"]),
-
-            "end_frame":
-                str(memory["end_frame"])
-
-        }
-
-
-
-    # =====================================================
-    # MULTIPLE MEMORY WITH CHUNKING
-    # =====================================================
 
     def add_memories(
         self,
         memories,
-        embeddings
+        embeddings=None
     ):
 
 
-        total = len(memories)
 
+        if not memories:
 
-        print(
-            f"[VECTOR] Adding {total} memories"
-        )
-
-
-
-        inserted = 0
+            return
 
 
 
-        for start in range(
-            0,
-            total,
-            self.batch_size
-        ):
+        texts=[]
+
+        metadatas=[]
 
 
-            end = min(
-                start + self.batch_size,
-                total
+
+        for memory in memories:
+
+
+
+            description = memory.get(
+
+                "description",
+
+                ""
+
             )
 
 
-            batch_memories = memories[start:end]
 
+            if not description:
 
-            batch_embeddings = embeddings[start:end]
-
-
-
-            ids = []
-            documents = []
-            metadatas = []
-            vectors = []
+                continue
 
 
 
-            for memory, embedding in zip(
-                batch_memories,
-                batch_embeddings
-            ):
+            texts.append(
+                description
+            )
 
 
-                ids.append(
-                    memory["memory_id"]
+
+            metadatas.append({
+
+
+
+                "event_id":
+
+                str(
+                    memory.get(
+                        "event_id",
+                        ""
+                    )
+                ),
+
+
+
+                "event_type":
+
+                str(
+                    memory.get(
+                        "event_type",
+                        ""
+                    )
+                ),
+
+
+
+                "object":
+
+                str(
+                    memory.get(
+                        "class_name",
+                        ""
+                    )
+                ),
+
+
+
+                "track_id":
+
+                str(
+                    memory.get(
+                        "track_id",
+                        ""
+                    )
+                ),
+
+
+
+                "timestamp":
+
+                float(
+                    memory.get(
+                        "start_time",
+                        0
+                    )
                 )
 
-
-                documents.append(
-                    memory["description"]
-                )
-
-
-                metadatas.append(
-                    self.create_metadata(memory)
-                )
-
-
-                vectors.append(
-                    embedding.tolist()
-                )
+            })
 
 
 
+        if texts:
 
-            self.collection.upsert(
 
-                ids=ids,
 
-                embeddings=vectors,
+            self.db.add_texts(
 
-                documents=documents,
+                texts=texts,
 
                 metadatas=metadatas
 
@@ -220,51 +202,166 @@ class VectorStore:
 
 
 
-            inserted += len(ids)
+        print(
 
-
-            print(
-                f"[VECTOR] Inserted {inserted}/{total}"
-            )
-
-
-
-        return inserted
-
-
-
-
-    # =====================================================
-    # SEARCH
-    # =====================================================
-
-    def search(
-        self,
-        query_embedding,
-        top_k=5
-    ):
-
-
-        results = self.collection.query(
-
-            query_embeddings=[
-                query_embedding.tolist()
-            ],
-
-            n_results=top_k
+            f"[VECTOR] Added {len(texts)} memories"
 
         )
 
 
-        return results
+
+
+
 
 
 
 
     # =====================================================
-    # COUNT
+    # SEARCH FUNCTION
+    # Compatible with HybridRetriever
     # =====================================================
 
-    def count(self):
 
-        return self.collection.count()
+    def search(
+
+        self,
+
+        query,
+
+        k=5,
+
+        top_k=None
+
+    ):
+
+
+        # HybridRetriever uses top_k
+        if top_k is not None:
+
+            k = top_k
+
+
+
+        results = self.db.similarity_search_with_score(
+
+            query,
+
+            k=k
+
+        )
+
+
+
+        output=[]
+
+
+
+        for doc,score in results:
+
+
+
+            output.append({
+
+
+
+                "content":
+
+                doc.page_content,
+
+
+
+                "metadata":
+
+                doc.metadata,
+
+
+
+                "score":
+
+                float(score)
+
+            })
+
+
+
+        return output
+
+
+
+
+
+
+
+    # =====================================================
+    # LANGCHAIN SIMILARITY SEARCH
+    # =====================================================
+
+
+    def similarity_search(
+
+        self,
+
+        query,
+
+        k=5
+
+    ):
+
+
+        return self.db.similarity_search(
+
+            query,
+
+            k=k
+
+        )
+
+
+
+
+
+
+
+
+    # =====================================================
+    # DELETE COLLECTION
+    # =====================================================
+
+
+    def clear(self):
+
+
+        self.db.delete_collection()
+
+
+
+        print(
+            "[VECTOR] Collection cleared"
+        )
+
+
+
+
+
+
+
+
+    # =====================================================
+    # COUNT DOCUMENTS
+    # =====================================================
+
+
+    def count_documents(self):
+
+
+        try:
+
+
+            return self.db._collection.count()
+
+
+
+        except Exception:
+
+
+            return 0

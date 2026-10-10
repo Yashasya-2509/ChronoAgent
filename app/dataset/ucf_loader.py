@@ -12,48 +12,29 @@ class UCFLoader:
 
     def get_videos(self):
 
-        videos = []
+        videos=[]
 
 
         for video in self.dataset_path.rglob("*.mp4"):
 
+
+            category = video.parent.name
+
+
             videos.append({
 
-                "path": str(video),
+                "name":
+                    video.name,
 
-                "name": video.name,
 
-                "category": video.parent.name
+                "path":
+                    str(video),
+
+
+                "category":
+                    category
 
             })
 
 
         return videos
-
-
-
-
-if __name__ == "__main__":
-
-
-    loader = UCFLoader(
-        "data/dataset/UCF-Crime"
-    )
-
-
-    videos = loader.get_videos()
-
-
-    print("="*60)
-
-    print(
-        "TOTAL VIDEOS:",
-        len(videos)
-    )
-
-    print("="*60)
-
-
-    for video in videos[:10]:
-
-        print(video)

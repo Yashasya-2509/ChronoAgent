@@ -1,35 +1,37 @@
-from pathlib import Path
-import cv2
-import json
-import shutil
-import uuid
-from datetime import datetime
 
-from app.config import (
-    VIDEO_FOLDER,
-    METADATA_FOLDER,
-    SUPPORTED_VIDEO_EXTENSIONS,
-)
+from pathlib import Path
+from datetime import datetime
+import hashlib
+import shutil
+
+import cv2
+
+from app.video_processing.video_metadata import VideoMetadata
 
 
 class VideoIngestion:
 
-    def __init__(self):
-        VIDEO_FOLDER.mkdir(parents=True, exist_ok=True)
-        METADATA_FOLDER.mkdir(parents=True, exist_ok=True)
+    # Supported CCTV video formats
+    SUPPORTED_EXTENSIONS = {
+        ".mp4",
+        ".avi",
+        ".mov"
+    }
 
-    # ---------------------------------------------------------
-    # Generate unique video ID
-    # ---------------------------------------------------------
+    def __init__(self, video_dir="data/videos"):
 
-    def generate_video_id(self):
-        return f"VID_{uuid.uuid4().hex[:8]}"
+        self.video_dir = Path(video_dir)
 
-    # ---------------------------------------------------------
-    # Validate video
-    # ---------------------------------------------------------
+        self.video_dir.mkdir(
+            parents=True,
+            exist_ok=True
+        )
 
-    def validate_video(self, video_path):
+    # =========================================================
+    # FORMAT VALIDATION
+    # =========================================================
+
+    def validate_format(self, video_path):
 
         video_path = Path(video_path)
 
@@ -38,148 +40,352 @@ class VideoIngestion:
                 f"Video not found: {video_path}"
             )
 
-        if video_path.suffix.lower() not in SUPPORTED_VIDEO_EXTENSIONS:
+        if not video_path.is_file():
             raise ValueError(
-                f"Unsupported video format: {video_path.suffix}"
+                f"Path is not a file: {video_path}"
             )
 
-        cap = cv2.VideoCapture(str(video_path))
+        extension = video_path.suffix.lower()
 
-        if not cap.isOpened():
+        if extension not in self.SUPPORTED_EXTENSIONS:
             raise ValueError(
-                f"Could not open video: {video_path}"
+                f"Unsupported video format: {extension}. "
+                f"Supported formats: "
+                f"{sorted(self.SUPPORTED_EXTENSIONS)}"
             )
-
-        cap.release()
 
         return True
 
-    # ---------------------------------------------------------
-    # Extract video metadata
-    # ---------------------------------------------------------
+    # =========================================================
+    # VIDEO ID GENERATION
+    # =========================================================
 
-    def extract_metadata(self, video_path, video_id):
+    def generate_video_id(self, video_path):
 
         video_path = Path(video_path)
 
-        cap = cv2.VideoCapture(str(video_path))
+        hasher = hashlib.sha256()
 
-        if not cap.isOpened():
-            raise ValueError(
+        with open(video_path, "rb") as video_file:
+
+            while True:
+
+                chunk = video_file.read(
+                    1024 * 1024
+                )
+
+                if not chunk:
+                    break
+
+                hasher.update(chunk)
+
+        # First 8 characters are sufficient for the prototype
+        return f"VID_{hasher.hexdigest()[:8]}"
+
+    # =========================================================
+    # VIDEO METADATA EXTRACTION
+    # =========================================================
+
+    def extract_metadata(
+        self,
+        video_path,
+        video_id=None,
+        original_filename=None,
+        camera_id=None
+    ):
+
+        video_path = Path(video_path)
+
+        self.validate_format(
+            video_path
+        )
+
+        # Generate ID if one was not supplied
+        if video_id is None:
+
+            video_id = self.generate_video_id(
+                video_path
+            )
+
+        # -----------------------------------------------------
+        # Open video
+        # -----------------------------------------------------
+
+        capture = cv2.VideoCapture(
+            str(video_path)
+        )
+
+        if not capture.isOpened():
+
+            raise RuntimeError(
                 f"Could not open video: {video_path}"
             )
 
-        fps = cap.get(cv2.CAP_PROP_FPS)
+        # -----------------------------------------------------
+        # Extract video properties
+        # -----------------------------------------------------
+
+        fps = capture.get(
+            cv2.CAP_PROP_FPS
+        )
 
         frame_count = int(
-            cap.get(cv2.CAP_PROP_FRAME_COUNT)
+            capture.get(
+                cv2.CAP_PROP_FRAME_COUNT
+            )
         )
 
         width = int(
-            cap.get(cv2.CAP_PROP_FRAME_WIDTH)
+            capture.get(
+                cv2.CAP_PROP_FRAME_WIDTH
+            )
         )
 
         height = int(
-            cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
+            capture.get(
+                cv2.CAP_PROP_FRAME_HEIGHT
+            )
         )
 
-        cap.release()
+        capture.release()
+
+        # -----------------------------------------------------
+        # Validate extracted properties
+        # -----------------------------------------------------
 
         if fps <= 0:
-            raise ValueError("Invalid video FPS.")
+
+            raise ValueError(
+                f"Invalid FPS detected for: {video_path}"
+            )
+
+        if frame_count <= 0:
+
+            raise ValueError(
+                f"Invalid frame count detected for: "
+                f"{video_path}"
+            )
+
+        if width <= 0 or height <= 0:
+
+            raise ValueError(
+                f"Invalid video resolution detected for: "
+                f"{video_path}"
+            )
+
+        # -----------------------------------------------------
+        # Calculate duration
+        # -----------------------------------------------------
 
         duration = frame_count / fps
 
-        metadata = {
-            "video_id": video_id,
-            "filename": video_path.name,
-            "path": None,
-            "fps": fps,
-            "frame_count": frame_count,
-            "duration": duration,
-            "width": width,
-            "height": height,
-            "resolution": f"{width}x{height}",
-            "created_at": datetime.now().isoformat(),
-        }
+        # -----------------------------------------------------
+        # Preserve original filename
+        # -----------------------------------------------------
+
+        if original_filename is None:
+
+            original_filename = video_path.name
+
+        # -----------------------------------------------------
+        # Create metadata object
+        # -----------------------------------------------------
+
+        metadata = VideoMetadata(
+
+            video_id=video_id,
+
+            filename=original_filename,
+
+            format=(
+                video_path.suffix
+                .lower()
+                .replace(".", "")
+            ),
+
+            fps=fps,
+
+            frame_count=frame_count,
+
+            duration=duration,
+
+            width=width,
+
+            height=height,
+
+            camera_id=camera_id,
+
+            created_at=datetime.now()
+                .isoformat()
+        )
 
         return metadata
 
-    # ---------------------------------------------------------
-    # Main ingestion function
-    # ---------------------------------------------------------
+    # =========================================================
+    # VIDEO INGESTION
+    # =========================================================
 
-    def ingest(self, source_path):
+    def ingest(
+        self,
+        video_path,
+        camera_id=None
+    ):
 
-        source_path = Path(source_path)
+        video_path = Path(video_path)
+
+        print("=" * 60)
+        print("VIDEO INGESTION")
+        print("=" * 60)
+
+        # -----------------------------------------------------
+        # Step 1: Validate input
+        # -----------------------------------------------------
+
+        self.validate_format(
+            video_path
+        )
+
+        # -----------------------------------------------------
+        # Step 2: Preserve original filename
+        # -----------------------------------------------------
+
+        original_filename = video_path.name
 
         print(
-            f"[VIDEO] Ingesting: {source_path.name}"
+            f"[VIDEO] Input: {original_filename}"
         )
 
-        # 1. Validate
-        self.validate_video(source_path)
+        # -----------------------------------------------------
+        # Step 3: Generate deterministic Video ID
+        # -----------------------------------------------------
 
-        # 2. Generate unique ID
-        video_id = self.generate_video_id()
+        video_id = self.generate_video_id(
+            video_path
+        )
 
-        # 3. Destination path
+        print(
+            f"[VIDEO] ID: {video_id}"
+        )
+
+        # -----------------------------------------------------
+        # Step 4: Determine canonical storage path
+        # -----------------------------------------------------
+
+        extension = (
+            video_path.suffix.lower()
+        )
+
         destination = (
-            VIDEO_FOLDER
-            / f"{video_id}{source_path.suffix.lower()}"
+            self.video_dir /
+            f"{video_id}{extension}"
         )
 
-        # 4. Copy video
-        shutil.copy2(
-            source_path,
-            destination
-        )
+        # -----------------------------------------------------
+        # Step 5: Store one canonical copy
+        # -----------------------------------------------------
 
-        # 5. Extract metadata
-        metadata = self.extract_metadata(
-            destination,
-            video_id
-        )
+        if video_path.resolve() == destination.resolve():
 
-        # 6. Store final path
-        metadata["path"] = str(destination)
-
-        # 7. Save metadata JSON
-        metadata_path = (
-            METADATA_FOLDER
-            / f"{video_id}.json"
-        )
-
-        with open(
-            metadata_path,
-            "w",
-            encoding="utf-8"
-        ) as file:
-
-            json.dump(
-                metadata,
-                file,
-                indent=2
+            print(
+                "[VIDEO] Source is already "
+                "the canonical stored video."
             )
 
-        # 8. Print summary
+        elif destination.exists():
+
+            print(
+                f"[VIDEO] Canonical video already exists: "
+                f"{destination}"
+            )
+
+        else:
+
+            shutil.copy2(
+                video_path,
+                destination
+            )
+
+            print(
+                f"[VIDEO] Stored: {destination}"
+            )
+
+        # -----------------------------------------------------
+        # Step 6: Verify canonical video
+        # -----------------------------------------------------
+
+        if not destination.exists():
+
+            raise RuntimeError(
+                f"Canonical video was not created: "
+                f"{destination}"
+            )
+
+        # -----------------------------------------------------
+        # Step 7: Extract metadata
+        #
+        # IMPORTANT:
+        # Read the canonical video but preserve the
+        # original uploaded filename.
+        # -----------------------------------------------------
+
+        metadata = self.extract_metadata(
+
+            video_path=destination,
+
+            video_id=video_id,
+
+            original_filename=original_filename,
+
+            camera_id=camera_id
+        )
+
+        # -----------------------------------------------------
+        # Step 8: Display metadata
+        # -----------------------------------------------------
+
         print(
-            f"[VIDEO] Created: {video_id}"
+            f"[VIDEO] FPS: "
+            f"{metadata.fps:.2f}"
+        )
+
+        print(
+            f"[VIDEO] Frames: "
+            f"{metadata.frame_count}"
         )
 
         print(
             f"[VIDEO] Duration: "
-            f"{metadata['duration']:.2f} sec"
-        )
-
-        print(
-            f"[VIDEO] FPS: "
-            f"{metadata['fps']:.2f}"
+            f"{metadata.duration:.2f}s"
         )
 
         print(
             f"[VIDEO] Resolution: "
-            f"{metadata['resolution']}"
+            f"{metadata.resolution}"
+        )
+
+        print(
+            f"[VIDEO] Format: "
+            f"{metadata.format}"
+        )
+
+        print(
+            f"[VIDEO] Original filename: "
+            f"{metadata.filename}"
+        )
+
+        print(
+            f"[VIDEO] Camera ID: "
+            f"{metadata.camera_id}"
+        )
+
+        print(
+            f"[VIDEO] Stored path: "
+            f"{destination}"
+        )
+
+        print(
+            "=" * 60
         )
 
         return metadata
+

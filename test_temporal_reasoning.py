@@ -1,20 +1,51 @@
 import json
+from pathlib import Path
 
 from app.reasoning.temporal_reasoner import TemporalReasoner
 
 
 
-VIDEO_ID="VID_91bbf259"
+# ============================================================
+# Automatically find latest event memory
+# ============================================================
 
-
-MEMORY_PATH=(
-    f"data/memory/"
-    f"{VIDEO_ID}_event_memory.json"
+MEMORY_FOLDER = Path(
+    "data/memory"
 )
 
 
 
+def get_latest_memory():
+
+    memory_files = list(
+        MEMORY_FOLDER.glob(
+            "*_event_memory.json"
+        )
+    )
+
+
+    if not memory_files:
+
+        raise FileNotFoundError(
+            "No event memory found. Run ChronoPipeline first."
+        )
+
+
+    # latest created file
+    latest_file = max(
+        memory_files,
+        key=lambda x: x.stat().st_mtime
+    )
+
+
+    return latest_file
+
+
+
+
+
 def main():
+
 
     print("\n")
     print("="*60)
@@ -23,35 +54,82 @@ def main():
 
 
 
-    with open(
-        MEMORY_PATH,
-        "r"
-    ) as file:
+    # ========================================================
+    # Load latest memory
+    # ========================================================
 
-        data=json.load(file)
-
-
-    memories=data["memories"]
+    memory_path = get_latest_memory()
 
 
     print(
-        "Memories loaded:",
+        "\nUsing Memory:"
+    )
+
+    print(
+        memory_path
+    )
+
+
+
+    with open(
+        memory_path,
+        "r",
+        encoding="utf-8"
+    ) as file:
+
+        data = json.load(file)
+
+
+
+    memories = data.get(
+        "memories",
+        []
+    )
+
+
+
+    print(
+        "\nMemories loaded:",
         len(memories)
     )
 
 
-    agent=TemporalReasoner()
 
+    if len(memories)==0:
+
+        raise Exception(
+            "Memory file is empty"
+        )
+
+
+
+
+
+    # ========================================================
+    # Temporal Reasoner
+    # ========================================================
+
+    agent = TemporalReasoner()
+
+
+
+
+
+    # ========================================================
+    # Test 1: First appearance
+    # ========================================================
 
 
     print("\nFIRST PERSON APPEARANCE")
     print("-"*40)
 
 
-    result=agent.find_first_event(
+
+    result = agent.find_first_event(
         memories,
         "person"
     )
+
 
 
     print(
@@ -60,16 +138,27 @@ def main():
 
 
 
+
+
+
+    # ========================================================
+    # Test 2: Timeline generation
+    # ========================================================
+
+
     print("\nEVENT TIMELINE")
     print("-"*40)
 
 
-    timeline=agent.create_timeline(
+
+    timeline = agent.create_timeline(
         memories
     )
 
 
+
     for item in timeline:
+
 
         print(
             f"{item['time']:.2f}s | "
@@ -79,14 +168,24 @@ def main():
 
 
 
+
+
+
+
     print("\n")
     print("="*60)
+
     print(
         " TEMPORAL REASONING COMPLETE "
     )
+
     print("="*60)
+
+
+
 
 
 
 if __name__=="__main__":
+
     main()

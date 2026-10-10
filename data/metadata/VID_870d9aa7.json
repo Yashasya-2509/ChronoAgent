@@ -1,0 +1,14 @@
+{
+    "video_id": "VID_870d9aa7",
+    "source_path": "/Users/yashasyaaggarwal/Desktop/Minpro/data/dataset/UCF-Crime/Anomaly-Videos-Part-1/Assault011_x264.mp4",
+    "filename": "Assault011_x264.mp4",
+    "file_size_mb": 19.18,
+    "file_hash": "53e6260712d1c7685c80cce76514aed20748d1b3c2e68b9dbed9797ac3085338",
+    "fps": 30.0,
+    "frame_count": 2291,
+    "duration_seconds": 76.36666666666666,
+    "width": 320,
+    "height": 240,
+    "resolution": "320x240",
+    "created_at": "2026-09-22T15:51:52.650480"
+}

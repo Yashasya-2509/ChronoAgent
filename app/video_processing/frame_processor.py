@@ -1,5 +1,5 @@
-from pathlib import Path
 import cv2
+from pathlib import Path
 
 
 class FrameProcessor:
@@ -7,27 +7,42 @@ class FrameProcessor:
     def __init__(
         self,
         sample_fps=2.0,
-        scene_threshold=27.0,
-        min_scene_len=15
+        max_frames_per_scene=40,
+        max_total_frames=120
     ):
+        """
+        Controlled temporal frame sampling.
 
-        self.sample_fps = sample_fps
-        self.scene_threshold = scene_threshold
-        self.min_scene_len = min_scene_len
+        The processor samples frames across the complete duration
+        of each scene instead of stopping at the beginning when
+        a maximum frame limit is reached.
+        """
 
+        self.sample_fps = float(sample_fps)
 
-    # =========================================================
-    # FRAME EXTRACTION
-    # =========================================================
+        self.max_frames_per_scene = int(
+            max_frames_per_scene
+        )
+
+        self.max_total_frames = int(
+            max_total_frames
+        )
+
+    # ---------------------------------------------------------
+    # EXTRACT FRAMES
+    # ---------------------------------------------------------
 
     def extract_frames(
         self,
         video_path,
+        scenes,
         output_dir,
-        video_id
+        max_frames_per_scene=None,
+        max_total_frames=None
     ):
 
-        video_path = Path(video_path)
+        video_path = str(video_path)
+
         output_dir = Path(output_dir)
 
         output_dir.mkdir(
@@ -35,334 +50,279 @@ class FrameProcessor:
             exist_ok=True
         )
 
-
-        cap = cv2.VideoCapture(
-            str(video_path)
-        )
-
-
-        if not cap.isOpened():
-
-            raise ValueError(
-                f"Could not open video: {video_path}"
+        if max_frames_per_scene is None:
+            max_frames_per_scene = (
+                self.max_frames_per_scene
             )
 
+        if max_total_frames is None:
+            max_total_frames = (
+                self.max_total_frames
+            )
+
+        if self.sample_fps <= 0:
+            raise ValueError(
+                "sample_fps must be greater than 0"
+            )
+
+        cap = cv2.VideoCapture(
+            video_path
+        )
+
+        if not cap.isOpened():
+            raise RuntimeError(
+                f"Cannot open video: {video_path}"
+            )
 
         fps = cap.get(
             cv2.CAP_PROP_FPS
         )
 
-
         if fps <= 0:
-
-            raise ValueError(
-                "Invalid video FPS."
+            raise RuntimeError(
+                "Unable to determine video FPS."
             )
 
-
-        frame_interval = max(
-            1,
-            int(round(
-                fps / self.sample_fps
-            ))
+        total_video_frames = int(
+            cap.get(
+                cv2.CAP_PROP_FRAME_COUNT
+            )
         )
 
+        duration = (
+            total_video_frames / fps
+        )
 
-        frames = []
+        print()
+        print("=" * 60)
+        print("FRAME PROCESSING")
+        print("=" * 60)
+        print(
+            f"Video FPS          : {fps:.2f}"
+        )
+        print(
+            f"Video Frames       : {total_video_frames}"
+        )
+        print(
+            f"Video Duration     : {duration:.2f}s"
+        )
+        print(
+            f"Sampling FPS       : {self.sample_fps:.2f}"
+        )
+        print(
+            f"Max/Scene          : {max_frames_per_scene}"
+        )
+        print(
+            f"Max Total          : {max_total_frames}"
+        )
 
-        frame_index = 0
-        saved_index = 0
+        extracted_frames = []
 
+        total_saved = 0
 
-        while True:
+        # -----------------------------------------------------
+        # PROCESS EACH SCENE
+        # -----------------------------------------------------
 
+        for scene in scenes:
 
-            ret, frame = cap.read()
-
-
-            if not ret:
+            if total_saved >= max_total_frames:
                 break
 
+            scene_id = scene.get(
+                "scene_id"
+            )
 
+            start_frame = int(
+                scene.get(
+                    "start_frame",
+                    0
+                )
+            )
 
-            if frame_index % frame_interval == 0:
+            end_frame = int(
+                scene.get(
+                    "end_frame",
+                    total_video_frames
+                )
+            )
 
+            if end_frame <= start_frame:
+                continue
 
-                timestamp = (
-                    frame_index / fps
+            scene_frame_count = (
+                end_frame - start_frame
+            )
+
+            # -------------------------------------------------
+            # Determine number of samples
+            # -------------------------------------------------
+
+            duration_frames = (
+                scene_frame_count / fps
+            )
+
+            desired_samples = int(
+                duration_frames *
+                self.sample_fps
+            )
+
+            desired_samples = max(
+                1,
+                desired_samples
+            )
+
+            desired_samples = min(
+                desired_samples,
+                max_frames_per_scene
+            )
+
+            remaining_global = (
+                max_total_frames -
+                total_saved
+            )
+
+            desired_samples = min(
+                desired_samples,
+                remaining_global
+            )
+
+            if desired_samples <= 0:
+                break
+
+            # -------------------------------------------------
+            # Generate evenly distributed frame positions
+            # -------------------------------------------------
+
+            if desired_samples == 1:
+
+                frame_positions = [
+                    start_frame
+                ]
+
+            else:
+
+                step = (
+                    (scene_frame_count - 1)
+                    /
+                    (desired_samples - 1)
                 )
 
+                frame_positions = [
+                    int(
+                        round(
+                            start_frame +
+                            i * step
+                        )
+                    )
+                    for i in range(
+                        desired_samples
+                    )
+                ]
 
-                frame_id = (
-                    f"F{saved_index + 1:05d}"
+            print()
+            print(
+                f"[SCENE] {scene_id}"
+            )
+
+            print(
+                f"        Frames: "
+                f"{start_frame}-{end_frame}"
+            )
+
+            print(
+                f"        Duration: "
+                f"{duration_frames:.2f}s"
+            )
+
+            print(
+                f"        Samples: "
+                f"{len(frame_positions)}"
+            )
+
+            # -------------------------------------------------
+            # Extract selected frames
+            # -------------------------------------------------
+
+            for frame_id in frame_positions:
+
+                if total_saved >= max_total_frames:
+                    break
+
+                cap.set(
+                    cv2.CAP_PROP_POS_FRAMES,
+                    frame_id
                 )
 
+                ret, frame = cap.read()
+
+                if not ret:
+                    continue
+
+                filename = (
+                    f"frame_{total_saved:05d}.jpg"
+                )
 
                 frame_path = (
                     output_dir /
-                    f"{frame_id}.jpg"
+                    filename
                 )
-
-
 
                 success = cv2.imwrite(
                     str(frame_path),
                     frame
                 )
 
+                if not success:
+                    continue
 
-                if success:
+                timestamp = (
+                    frame_id / fps
+                )
 
+                frame_info = {
 
-                    frames.append({
+                    "frame_path":
+                    str(frame_path),
 
-                        "frame_id":
-                            frame_id,
+                    "path":
+                    str(frame_path),
 
+                    "frame_id":
+                    frame_id,
 
-                        "video_id":
-                            video_id,
+                    "frame_number":
+                    frame_id,
 
+                    "timestamp":
+                    round(
+                        timestamp,
+                        3
+                    ),
 
-                        "frame_number":
-                            frame_index,
+                    "scene_id":
+                    scene_id
+                }
 
+                extracted_frames.append(
+                    frame_info
+                )
 
-                        "timestamp":
-                            timestamp,
-
-
-                        # CHANGED KEY
-                        "frame_path":
-                            str(frame_path),
-
-
-                        "is_keyframe":
-                            False
-
-                    })
-
-
-                    saved_index += 1
-
-
-
-            frame_index += 1
-
-
+                total_saved += 1
 
         cap.release()
 
-
+        print()
         print(
-            f"Frames extracted: {len(frames)}"
-        )
-
-
-        return frames
-
-
-
-    # =========================================================
-    # SCENE DETECTION
-    # =========================================================
-
-    def detect_scenes(
-        self,
-        video_path
-    ):
-
-
-        video_path = Path(video_path)
-
-
-        if not video_path.exists():
-
-            raise FileNotFoundError(
-                f"Video not found: {video_path}"
-            )
-
-
-        cap = cv2.VideoCapture(
-            str(video_path)
-        )
-
-
-        if not cap.isOpened():
-
-            raise RuntimeError(
-                f"Could not open video: {video_path}"
-            )
-
-
-
-        fps = cap.get(
-            cv2.CAP_PROP_FPS
-        )
-
-
-        frame_count = int(
-            cap.get(
-                cv2.CAP_PROP_FRAME_COUNT
-            )
-        )
-
-
-        duration = (
-            frame_count / fps
-        )
-
-
-
-        print(
-            f"Video FPS: {fps}"
+            f"Candidate frames extracted : "
+            f"{len(extracted_frames)}"
         )
 
         print(
-            f"Video frames: {frame_count}"
+            f"Maximum allowed            : "
+            f"{max_total_frames}"
         )
 
-        print(
-            f"Video duration: {duration:.2f}s"
-        )
+        print("=" * 60)
 
-
-
-        scenes = []
-
-        scene_start = 0
-
-        previous_gray = None
-
-        last_scene_boundary = 0
-
-        frame_index = 0
-
-
-
-        while True:
-
-
-            success, frame = cap.read()
-
-
-            if not success:
-                break
-
-
-
-            small_frame = cv2.resize(
-                frame,
-                (320,180)
-            )
-
-
-            gray = cv2.cvtColor(
-                small_frame,
-                cv2.COLOR_BGR2GRAY
-            )
-
-
-
-            if previous_gray is not None:
-
-
-                difference = cv2.absdiff(
-                    previous_gray,
-                    gray
-                )
-
-
-                score = float(
-                    difference.mean()
-                )
-
-
-                frames_since_boundary = (
-                    frame_index -
-                    last_scene_boundary
-                )
-
-
-
-                if (
-                    score >= self.scene_threshold
-                    and
-                    frames_since_boundary >= self.min_scene_len
-                ):
-
-
-                    scenes.append({
-
-                        "scene_id":
-                            f"S{len(scenes)+1:04d}",
-
-
-                        "start_frame":
-                            scene_start,
-
-
-                        "end_frame":
-                            frame_index,
-
-
-                        "start_time":
-                            scene_start / fps,
-
-
-                        "end_time":
-                            frame_index / fps
-
-                    })
-
-
-                    scene_start = frame_index
-
-                    last_scene_boundary = frame_index
-
-
-
-            previous_gray = gray
-
-            frame_index += 1
-
-
-
-        cap.release()
-
-
-
-        if scene_start < frame_index:
-
-
-            scenes.append({
-
-                "scene_id":
-                    f"S{len(scenes)+1:04d}",
-
-
-                "start_frame":
-                    scene_start,
-
-
-                "end_frame":
-                    frame_index,
-
-
-                "start_time":
-                    scene_start / fps,
-
-
-                "end_time":
-                    frame_index / fps
-
-            })
-
-
-
-        print(
-            f"\nDetected {len(scenes)} scene(s)."
-        )
-
-
-        return scenes
+        return extracted_frames

@@ -1,0 +1,14 @@
+{
+    "video_id": "VID_3add501b",
+    "source_path": "/Users/yashasyaaggarwal/Desktop/Minpro/data/dataset/UCF-Crime/Anomaly-Videos-Part-1/Fighting022_x264.mp4",
+    "filename": "Fighting022_x264.mp4",
+    "file_size_mb": 34.38,
+    "file_hash": "cc6d19723bcb981e4ef0abd1219559f8f42f8fc57da8319eae32b9463edd9996",
+    "fps": 30.0,
+    "frame_count": 4354,
+    "duration_seconds": 145.13333333333333,
+    "width": 320,
+    "height": 240,
+    "resolution": "320x240",
+    "created_at": "2026-09-22T15:51:51.270884"
+}

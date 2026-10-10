@@ -1,0 +1,14 @@
+{
+    "video_id": "VID_d6e25cb5",
+    "source_path": "/Users/yashasyaaggarwal/Desktop/Minpro/data/dataset/UCF-Crime/Normal-Videos-Part-1/Normal_Videos_050_x264.mp4",
+    "filename": "Normal_Videos_050_x264.mp4",
+    "file_size_mb": 34.22,
+    "file_hash": "0d6420c4455fd56e205747159e8c2cf97dd50cbc04b35a870090ecad18adbc77",
+    "fps": 30.0,
+    "frame_count": 4198,
+    "duration_seconds": 139.93333333333334,
+    "width": 320,
+    "height": 240,
+    "resolution": "320x240",
+    "created_at": "2026-09-22T15:51:58.072679"
+}

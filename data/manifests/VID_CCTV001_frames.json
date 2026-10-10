@@ -1,0 +1,217 @@
+{
+  "video_id": "VID_CCTV001",
+  "frame_count": 26,
+  "frames": [
+    {
+      "frame_id": "F00001",
+      "video_id": "VID_CCTV001",
+      "frame_number": 0,
+      "timestamp": 0.0,
+      "path": "/Users/yashasyaaggarwal/Desktop/Minpro/data/frames/VID_CCTV001/F00001.jpg",
+      "is_keyframe": true,
+      "scene_id": "S0001"
+    },
+    {
+      "frame_id": "F00002",
+      "video_id": "VID_CCTV001",
+      "frame_number": 15,
+      "timestamp": 0.5,
+      "path": "/Users/yashasyaaggarwal/Desktop/Minpro/data/frames/VID_CCTV001/F00002.jpg",
+      "is_keyframe": false
+    },
+    {
+      "frame_id": "F00003",
+      "video_id": "VID_CCTV001",
+      "frame_number": 30,
+      "timestamp": 1.0,
+      "path": "/Users/yashasyaaggarwal/Desktop/Minpro/data/frames/VID_CCTV001/F00003.jpg",
+      "is_keyframe": false
+    },
+    {
+      "frame_id": "F00004",
+      "video_id": "VID_CCTV001",
+      "frame_number": 45,
+      "timestamp": 1.5,
+      "path": "/Users/yashasyaaggarwal/Desktop/Minpro/data/frames/VID_CCTV001/F00004.jpg",
+      "is_keyframe": false
+    },
+    {
+      "frame_id": "F00005",
+      "video_id": "VID_CCTV001",
+      "frame_number": 60,
+      "timestamp": 2.0,
+      "path": "/Users/yashasyaaggarwal/Desktop/Minpro/data/frames/VID_CCTV001/F00005.jpg",
+      "is_keyframe": false
+    },
+    {
+      "frame_id": "F00006",
+      "video_id": "VID_CCTV001",
+      "frame_number": 75,
+      "timestamp": 2.5,
+      "path": "/Users/yashasyaaggarwal/Desktop/Minpro/data/frames/VID_CCTV001/F00006.jpg",
+      "is_keyframe": false
+    },
+    {
+      "frame_id": "F00007",
+      "video_id": "VID_CCTV001",
+      "frame_number": 90,
+      "timestamp": 3.0,
+      "path": "/Users/yashasyaaggarwal/Desktop/Minpro/data/frames/VID_CCTV001/F00007.jpg",
+      "is_keyframe": false
+    },
+    {
+      "frame_id": "F00008",
+      "video_id": "VID_CCTV001",
+      "frame_number": 105,
+      "timestamp": 3.5,
+      "path": "/Users/yashasyaaggarwal/Desktop/Minpro/data/frames/VID_CCTV001/F00008.jpg",
+      "is_keyframe": false
+    },
+    {
+      "frame_id": "F00009",
+      "video_id": "VID_CCTV001",
+      "frame_number": 120,
+      "timestamp": 4.0,
+      "path": "/Users/yashasyaaggarwal/Desktop/Minpro/data/frames/VID_CCTV001/F00009.jpg",
+      "is_keyframe": false
+    },
+    {
+      "frame_id": "F00010",
+      "video_id": "VID_CCTV001",
+      "frame_number": 135,
+      "timestamp": 4.5,
+      "path": "/Users/yashasyaaggarwal/Desktop/Minpro/data/frames/VID_CCTV001/F00010.jpg",
+      "is_keyframe": false
+    },
+    {
+      "frame_id": "F00011",
+      "video_id": "VID_CCTV001",
+      "frame_number": 150,
+      "timestamp": 5.0,
+      "path": "/Users/yashasyaaggarwal/Desktop/Minpro/data/frames/VID_CCTV001/F00011.jpg",
+      "is_keyframe": false
+    },
+    {
+      "frame_id": "F00012",
+      "video_id": "VID_CCTV001",
+      "frame_number": 165,
+      "timestamp": 5.5,
+      "path": "/Users/yashasyaaggarwal/Desktop/Minpro/data/frames/VID_CCTV001/F00012.jpg",
+      "is_keyframe": false
+    },
+    {
+      "frame_id": "F00013",
+      "video_id": "VID_CCTV001",
+      "frame_number": 180,
+      "timestamp": 6.0,
+      "path": "/Users/yashasyaaggarwal/Desktop/Minpro/data/frames/VID_CCTV001/F00013.jpg",
+      "is_keyframe": true,
+      "scene_id": "S0001"
+    },
+    {
+      "frame_id": "F00014",
+      "video_id": "VID_CCTV001",
+      "frame_number": 195,
+      "timestamp": 6.5,
+      "path": "/Users/yashasyaaggarwal/Desktop/Minpro/data/frames/VID_CCTV001/F00014.jpg",
+      "is_keyframe": false
+    },
+    {
+      "frame_id": "F00015",
+      "video_id": "VID_CCTV001",
+      "frame_number": 210,
+      "timestamp": 7.0,
+      "path": "/Users/yashasyaaggarwal/Desktop/Minpro/data/frames/VID_CCTV001/F00015.jpg",
+      "is_keyframe": false
+    },
+    {
+      "frame_id": "F00016",
+      "video_id": "VID_CCTV001",
+      "frame_number": 225,
+      "timestamp": 7.5,
+      "path": "/Users/yashasyaaggarwal/Desktop/Minpro/data/frames/VID_CCTV001/F00016.jpg",
+      "is_keyframe": false
+    },
+    {
+      "frame_id": "F00017",
+      "video_id": "VID_CCTV001",
+      "frame_number": 240,
+      "timestamp": 8.0,
+      "path": "/Users/yashasyaaggarwal/Desktop/Minpro/data/frames/VID_CCTV001/F00017.jpg",
+      "is_keyframe": false
+    },
+    {
+      "frame_id": "F00018",
+      "video_id": "VID_CCTV001",
+      "frame_number": 255,
+      "timestamp": 8.5,
+      "path": "/Users/yashasyaaggarwal/Desktop/Minpro/data/frames/VID_CCTV001/F00018.jpg",
+      "is_keyframe": false
+    },
+    {
+      "frame_id": "F00019",
+      "video_id": "VID_CCTV001",
+      "frame_number": 270,
+      "timestamp": 9.0,
+      "path": "/Users/yashasyaaggarwal/Desktop/Minpro/data/frames/VID_CCTV001/F00019.jpg",
+      "is_keyframe": false
+    },
+    {
+      "frame_id": "F00020",
+      "video_id": "VID_CCTV001",
+      "frame_number": 285,
+      "timestamp": 9.5,
+      "path": "/Users/yashasyaaggarwal/Desktop/Minpro/data/frames/VID_CCTV001/F00020.jpg",
+      "is_keyframe": false
+    },
+    {
+      "frame_id": "F00021",
+      "video_id": "VID_CCTV001",
+      "frame_number": 300,
+      "timestamp": 10.0,
+      "path": "/Users/yashasyaaggarwal/Desktop/Minpro/data/frames/VID_CCTV001/F00021.jpg",
+      "is_keyframe": false
+    },
+    {
+      "frame_id": "F00022",
+      "video_id": "VID_CCTV001",
+      "frame_number": 315,
+      "timestamp": 10.5,
+      "path": "/Users/yashasyaaggarwal/Desktop/Minpro/data/frames/VID_CCTV001/F00022.jpg",
+      "is_keyframe": false
+    },
+    {
+      "frame_id": "F00023",
+      "video_id": "VID_CCTV001",
+      "frame_number": 330,
+      "timestamp": 11.0,
+      "path": "/Users/yashasyaaggarwal/Desktop/Minpro/data/frames/VID_CCTV001/F00023.jpg",
+      "is_keyframe": false
+    },
+    {
+      "frame_id": "F00024",
+      "video_id": "VID_CCTV001",
+      "frame_number": 345,
+      "timestamp": 11.5,
+      "path": "/Users/yashasyaaggarwal/Desktop/Minpro/data/frames/VID_CCTV001/F00024.jpg",
+      "is_keyframe": false
+    },
+    {
+      "frame_id": "F00025",
+      "video_id": "VID_CCTV001",
+      "frame_number": 360,
+      "timestamp": 12.0,
+      "path": "/Users/yashasyaaggarwal/Desktop/Minpro/data/frames/VID_CCTV001/F00025.jpg",
+      "is_keyframe": false
+    },
+    {
+      "frame_id": "F00026",
+      "video_id": "VID_CCTV001",
+      "frame_number": 375,
+      "timestamp": 12.5,
+      "path": "/Users/yashasyaaggarwal/Desktop/Minpro/data/frames/VID_CCTV001/F00026.jpg",
+      "is_keyframe": true,
+      "scene_id": "S0001"
+    }
+  ]
+}

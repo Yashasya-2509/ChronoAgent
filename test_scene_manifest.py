@@ -2,7 +2,7 @@ from app.video_processing.scene_detector import SceneDetector
 from app.video_processing.manifest_manager import ManifestManager
 
 
-VIDEO_PATH = "data/videos/test_video.mp4"
+VIDEO_PATH = "data/videos/VID_eddb5790.mp4"
 VIDEO_ID = "VID_TEST001"
 MANIFEST_DIR = "data/manifests"
 

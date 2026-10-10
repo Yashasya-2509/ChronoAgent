@@ -1,0 +1,15 @@
+# Generated video metadata and manifests
+data/metadata/
+data/manifests/
+
+# Chroma vector database
+data/chroma_db/
+
+# Generated embeddings and caches
+data/embeddings/
+data/cache/
+
+# Secrets
+.env
+.env.*
+!.env.example

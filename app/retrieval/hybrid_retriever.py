@@ -1,28 +1,38 @@
 import json
 from pathlib import Path
 
-from app.vector_memory.embedding_manager import EmbeddingManager
 from app.vector_memory.vector_store import VectorStore
+
 
 
 class HybridRetriever:
 
 
+
     def __init__(
         self,
-        graph_path
+        graph_path,
+        video_id
     ):
+
 
         self.graph_path = Path(
             graph_path
         )
 
 
+        self.video_id = video_id
+
+
+
         if not self.graph_path.exists():
 
             raise FileNotFoundError(
+
                 f"Knowledge graph not found: {self.graph_path}"
+
             )
+
 
 
         with open(
@@ -34,9 +44,12 @@ class HybridRetriever:
 
 
 
-        self.embedding_manager = EmbeddingManager()
+        # ===========================
+        # CHROMA VECTOR STORE
+        # ===========================
 
         self.vector_store = VectorStore()
+
 
 
         print(
@@ -45,81 +58,142 @@ class HybridRetriever:
 
 
 
+
+
+
+
     # ==================================================
-    # VECTOR SEARCH
+    # VECTOR SEARCH (CHROMA)
     # ==================================================
 
+
     def vector_search(
+
         self,
+
         query,
+
+        video_id,
+
         top_k=5
+
     ):
 
 
-        query_embedding = (
-            self.embedding_manager.encode(
-                query
-            )
-        )
-
 
         results = self.vector_store.search(
-            query_embedding,
+
+            query,
+
             top_k=top_k
+
         )
+
 
 
         retrieved=[]
 
 
-        ids = results.get(
-            "ids",
-            [[]]
-        )[0]
 
-
-        documents = results.get(
-            "documents",
-            [[]]
-        )[0]
-
-
-        metadatas = results.get(
-            "metadatas",
-            [[]]
-        )[0]
-
-
-        distances = results.get(
-            "distances",
-            [[]]
-        )[0]
+        for r in results:
 
 
 
-        for i in range(len(ids)):
+            metadata = r.get(
+
+                "metadata",
+
+                {}
+
+            )
+
+
+
+            # ----------------------------
+            # VIDEO FILTER
+            # ----------------------------
+
+            stored_video = metadata.get(
+
+                "video_id"
+
+            )
+
+
+
+            # Some old memories don't have video_id
+            # allow them
+
+
+            if (
+
+                stored_video is not None
+
+                and
+
+                stored_video != video_id
+
+            ):
+
+                continue
+
+
+
+
 
             retrieved.append({
 
+
+
                 "memory_id":
-                    ids[i],
+
+                    metadata.get(
+
+                        "event_id"
+
+                    ),
+
 
 
                 "description":
-                    documents[i],
+
+                    r.get(
+
+                        "content"
+
+                    ),
+
 
 
                 "metadata":
-                    metadatas[i],
+
+                    metadata,
 
 
-                "distance":
-                    distances[i]
+
+                "score":
+
+                    r.get(
+
+                        "score"
+
+                    )
 
             })
 
 
+
+            if len(retrieved) >= top_k:
+
+                break
+
+
+
         return retrieved
+
+
+
+
 
 
 
@@ -127,10 +201,17 @@ class HybridRetriever:
     # GRAPH SEARCH
     # ==================================================
 
+
     def graph_search(
+
         self,
-        vector_results
+
+        vector_results,
+
+        top_k=20
+
     ):
+
 
 
         results=[]
@@ -140,103 +221,187 @@ class HybridRetriever:
 
 
 
-        # -----------------------------------
-        # Extract event ids from metadata
-        # -----------------------------------
-
-        for result in vector_results:
+        for item in vector_results:
 
 
-            metadata = result.get(
-                "metadata",
-                {}
-            )
 
+            eid=item["metadata"].get(
 
-            event_id = metadata.get(
                 "event_id"
+
             )
 
 
-            if event_id:
+            if eid:
 
-                event_ids.add(
-                    event_id
+                event_ids.add(eid)
+
+
+
+
+
+        related_ids=set(event_ids)
+
+
+
+        matching_edges=[]
+
+
+
+
+        # -----------------------------
+        # CONNECTED EVENTS
+        # -----------------------------
+
+
+        for edge in self.graph_data.get(
+
+            "edges",
+
+            []
+
+        ):
+
+
+
+            if (
+
+                edge.get("source") in event_ids
+
+                or
+
+                edge.get("target") in event_ids
+
+            ):
+
+
+
+                matching_edges.append(edge)
+
+
+
+                related_ids.add(
+
+                    edge.get("source")
+
+                )
+
+
+                related_ids.add(
+
+                    edge.get("target")
+
                 )
 
 
 
-        # -----------------------------------
-        # Search connected graph edges
-        # -----------------------------------
-
-        for edge in self.graph_data["edges"]:
 
 
-            if (
-                edge["source"] in event_ids
-                or
-                edge["target"] in event_ids
-            ):
+
+
+        # -----------------------------
+        # GRAPH NODES
+        # -----------------------------
+
+
+        for node in self.graph_data.get(
+
+            "nodes",
+
+            []
+
+        ):
+
+
+
+            if node.get("id") in related_ids:
+
 
 
                 results.append({
 
-                    "source":
-                        edge["source"],
 
-
-                    "target":
-                        edge["target"],
-
-
-                    "relation":
-                        edge.get(
-                            "relation"
-                        )
-
-                })
-
-
-
-        # -----------------------------------
-        # Also return event information
-        # -----------------------------------
-
-        for node in self.graph_data["nodes"]:
-
-
-            if node["id"] in event_ids:
-
-
-                results.append({
 
                     "event_id":
-                        node["id"],
+
+                    node.get("id"),
+
 
 
                     "event_type":
-                        node.get(
-                            "event_type"
-                        ),
+
+                    node.get(
+                        "event_type"
+                    ),
+
 
 
                     "timestamp":
-                        node.get(
-                            "timestamp"
-                        ),
+
+                    node.get(
+                        "timestamp"
+                    ),
+
 
 
                     "description":
-                        node.get(
-                            "description"
-                        )
+
+                    node.get(
+                        "description"
+                    )
 
                 })
 
 
 
-        return results
+
+
+
+        # -----------------------------
+        # GRAPH EDGES
+        # -----------------------------
+
+
+        for edge in matching_edges:
+
+
+
+            results.append({
+
+
+                "source":
+
+                edge.get(
+                    "source"
+                ),
+
+
+
+                "target":
+
+                edge.get(
+                    "target"
+                ),
+
+
+
+                "relation":
+
+                edge.get(
+                    "relation"
+                )
+
+            })
+
+
+
+        return results[:top_k]
+
+
+
+
+
+
 
 
 
@@ -244,61 +409,118 @@ class HybridRetriever:
     # HYBRID RETRIEVAL
     # ==================================================
 
+
     def retrieve(
+
         self,
+
         query,
-        top_k=5
+
+        video_id,
+
+        top_k=5,
+
+        vector_top_k=None,
+
+        graph_top_k=20
+
     ):
 
 
+
         print(
+
             "\n[RETRIEVAL] Query:"
+
         )
 
         print(query)
 
 
 
-        vector_results = (
-            self.vector_search(
-                query,
-                top_k
-            )
+
+
+        vector_limit = (
+
+            vector_top_k
+
+            if vector_top_k is not None
+
+            else top_k
+
         )
 
 
 
-        graph_results = (
-            self.graph_search(
-                vector_results
-            )
+
+
+        vector_results=self.vector_search(
+
+            query,
+
+            video_id,
+
+            vector_limit
+
         )
+
+
+
+
+
+        graph_results=self.graph_search(
+
+            vector_results,
+
+            graph_top_k
+
+        )
+
+
 
 
 
         print(
+
             f"[VECTOR] Results: {len(vector_results)}"
+
         )
 
 
         print(
+
             f"[GRAPH] Results: {len(graph_results)}"
+
         )
+
+
 
 
 
         return {
 
 
+
             "query":
+
                 query,
 
 
+
+            "video_id":
+
+                video_id,
+
+
+
             "vector_results":
+
                 vector_results,
 
 
+
             "graph_results":
+
                 graph_results
 
         }

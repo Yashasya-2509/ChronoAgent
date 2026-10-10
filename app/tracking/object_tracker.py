@@ -1,11 +1,11 @@
 from pathlib import Path
 import json
+import re
 
 from ultralytics import YOLO
 
 
 class ObjectTracker:
-
 
     def __init__(
         self,
@@ -13,93 +13,63 @@ class ObjectTracker:
         confidence=0.10,
         tracker_config="bytetrack.yaml"
     ):
-
         self.model_name = model_name
         self.confidence = confidence
         self.tracker_config = tracker_config
-
 
         print(
             f"[TRACKING] Loading model: {model_name}"
         )
 
-
-        self.model = YOLO(
-            model_name
-        )
-
+        self.model = YOLO(model_name)
 
         print(
             "[TRACKING] Model loaded successfully."
         )
 
-
-
     # =========================================================
-    # PIPELINE TRACK FUNCTION
+    # PUBLIC TRACK FUNCTION
     # =========================================================
 
     def track(
         self,
         video_path,
-        detections,
-        video_id=None
+        detections=None,
+        video_id=None,
+        sample_fps=None
     ):
 
-        """
-        ChronoAgent pipeline compatible tracker.
-
-        Dynamically tracks objects from any CCTV video.
-        """
-
-
         if video_id is None:
-
             video_id = "unknown_video"
-
-
 
         output_path = Path(
             f"data/tracks/{video_id}_tracks.json"
         )
 
-
         print(
             "[TRACKING] Starting ByteTrack..."
         )
 
-
         self.track_video(
             video_path=video_path,
             video_id=video_id,
-            output_path=output_path
+            output_path=output_path,
+            sample_fps=sample_fps
         )
 
+        with open(output_path, "r") as file:
+            tracking_data = json.load(file)
 
-        with open(
-            output_path,
-            "r"
-        ) as file:
-
-            tracking_data = json.load(
-                file
-            )
-
-
-        observations = tracking_data[
-            "observations"
+        unique_objects = tracking_data[
+            "unique_objects"
         ]
 
-
         print(
-            f"[TRACKING] Total observations: {len(observations)}"
+            f"[TRACKING] Unique objects: "
+            f"{len(unique_objects)}"
         )
 
-
-        return observations
-
-
-
+        return unique_objects
 
     # =========================================================
     # VIDEO TRACKING
@@ -109,94 +79,99 @@ class ObjectTracker:
         self,
         video_path,
         video_id,
-        output_path
+        output_path,
+        sample_fps=None
     ):
 
-
-        video_path = Path(
-            video_path
-        )
-
-
-        output_path = Path(
-            output_path
-        )
-
+        video_path = Path(video_path)
+        output_path = Path(output_path)
 
         if not video_path.exists():
-
             raise FileNotFoundError(
                 f"Video not found: {video_path}"
             )
-
 
         output_path.parent.mkdir(
             parents=True,
             exist_ok=True
         )
 
-
         print(
             f"[TRACKING] Processing: {video_path}"
         )
 
+        fps = self._get_fps(video_path)
 
+        if fps <= 0:
+            raise RuntimeError(
+                "Unable to determine video FPS."
+            )
 
-        results = self.model.track(
+        # -----------------------------------------------------
+        # Sampling
+        # -----------------------------------------------------
 
-            source=str(video_path),
+        if sample_fps and sample_fps > 0:
 
-            conf=self.confidence,
+            frame_stride = max(
+                1,
+                round(fps / sample_fps)
+            )
 
-            tracker=self.tracker_config,
+        else:
 
-            persist=True,
+            frame_stride = 1
 
-            stream=True,
-
-            verbose=False
-
+        print(
+            f"[TRACKING] Video FPS   : {fps:.2f}"
         )
 
+        print(
+            f"[TRACKING] Sample FPS  : "
+            f"{sample_fps if sample_fps else 'original'}"
+        )
 
+        print(
+            f"[TRACKING] Frame stride: "
+            f"{frame_stride}"
+        )
+
+        # -----------------------------------------------------
+        # ByteTrack
+        # -----------------------------------------------------
+
+        results = self.model.track(
+            source=str(video_path),
+            conf=self.confidence,
+            tracker=self.tracker_config,
+            persist=True,
+            stream=True,
+            vid_stride=frame_stride,
+            verbose=False
+        )
 
         tracked_objects = []
 
-
         total_frames = 0
-
-
         frames_with_tracks = 0
 
-
-        fps = self._get_fps(
-            video_path
-        )
-
-
+        # =====================================================
+        # PROCESS TRACKING RESULTS
+        # =====================================================
 
         for frame_number, result in enumerate(results):
 
-
             total_frames += 1
 
-
-
+            # No detections
             if result.boxes is None:
-
                 continue
 
-
-
+            # No tracking IDs
             if result.boxes.id is None:
-
                 continue
-
-
 
             frames_with_tracks += 1
-
-
 
             track_ids = (
                 result.boxes.id
@@ -205,7 +180,6 @@ class ObjectTracker:
                 .tolist()
             )
 
-
             classes = (
                 result.boxes.cls
                 .int()
@@ -213,13 +187,11 @@ class ObjectTracker:
                 .tolist()
             )
 
-
             confidences = (
                 result.boxes.conf
                 .cpu()
                 .tolist()
             )
-
 
             boxes = (
                 result.boxes.xyxy
@@ -227,7 +199,9 @@ class ObjectTracker:
                 .tolist()
             )
 
-
+            # -------------------------------------------------
+            # Each tracked detection
+            # -------------------------------------------------
 
             for (
                 track_id,
@@ -241,173 +215,329 @@ class ObjectTracker:
                 boxes
             ):
 
+                class_name = self.model.names[
+                    int(class_id)
+                ]
 
-                tracked_objects.append({
+                is_person = (
+                    class_name.lower() == "person"
+                )
 
-                    "video_id":
-                        video_id,
+                object_type = (
+                    "human"
+                    if is_person
+                    else "object"
+                )
 
+                # ---------------------------------------------
+                # ORIGINAL VIDEO FRAME
+                # ---------------------------------------------
 
-                    "frame_id":
-                        f"F{frame_number+1:05d}",
+                source_frame = (
+                    frame_number * frame_stride
+                )
 
+                # ---------------------------------------------
+                # ACTUAL VIDEO TIMESTAMP
+                # ---------------------------------------------
 
-                    "frame_number":
-                        frame_number,
+                timestamp = (
+                    source_frame / fps
+                )
 
+                tracked_objects.append(
+                    {
+                        "video_id": video_id,
 
-                    "timestamp":
-                        frame_number / fps,
+                        "source_frame": int(
+                            source_frame
+                        ),
 
+                        "timestamp": round(
+                            timestamp,
+                            3
+                        ),
 
-                    "track_id":
-                        int(track_id),
+                        "track_id": int(
+                            track_id
+                        ),
 
+                        "class_id": int(
+                            class_id
+                        ),
 
-                    "class_id":
-                        int(class_id),
+                        "class_name": class_name,
 
+                        "object_type": object_type,
 
-                    "class_name":
-                        self.model.names[
-                            int(class_id)
+                        "is_person": is_person,
+
+                        "confidence": round(
+                            float(confidence),
+                            3
+                        ),
+
+                        "bbox": {
+                            "x1": float(
+                                bbox[0]
+                            ),
+                            "y1": float(
+                                bbox[1]
+                            ),
+                            "x2": float(
+                                bbox[2]
+                            ),
+                            "y2": float(
+                                bbox[3]
+                            )
+                        }
+                    }
+                )
+
+        # =====================================================
+        # BUILD UNIQUE OBJECT INVENTORY
+        # =====================================================
+
+        unique_objects = {}
+
+        # Separate numbering:
+        #
+        # PERSON_001
+        # PERSON_002
+        #
+        # CAR_001
+        # CAR_002
+        #
+        # TRUCK_001
+        # TRUCK_002
+
+        class_counters = {}
+
+        for observation in tracked_objects:
+
+            track_id = observation[
+                "track_id"
+            ]
+
+            class_name = observation[
+                "class_name"
+            ]
+
+            # -------------------------------------------------
+            # Internal identity
+            # -------------------------------------------------
+
+            identity_key = (
+                class_name,
+                track_id
+            )
+
+            # -------------------------------------------------
+            # First observation of this object
+            # -------------------------------------------------
+
+            if identity_key not in unique_objects:
+
+                normalized_class = (
+                    self._normalize_class_name(
+                        class_name
+                    )
+                )
+
+                if normalized_class not in class_counters:
+
+                    class_counters[
+                        normalized_class
+                    ] = 0
+
+                class_counters[
+                    normalized_class
+                ] += 1
+
+                object_number = class_counters[
+                    normalized_class
+                ]
+
+                object_id = (
+                    f"{normalized_class}_"
+                    f"{object_number:03d}"
+                )
+
+                unique_objects[
+                    identity_key
+                ] = {
+
+                    # -----------------------------------------
+                    # Human-readable unique ID
+                    # -----------------------------------------
+
+                    "object_id": object_id,
+
+                    # -----------------------------------------
+                    # Internal ByteTrack ID
+                    # -----------------------------------------
+
+                    "track_id": track_id,
+
+                    # -----------------------------------------
+                    # Object information
+                    # -----------------------------------------
+
+                    "object": class_name,
+
+                    "object_type":
+                        observation[
+                            "object_type"
                         ],
 
+                    # -----------------------------------------
+                    # First appearance
+                    # -----------------------------------------
 
-                    "confidence":
-                        float(confidence),
-
-
-                    "bbox":{
-
-                        "x1":
-                            float(bbox[0]),
-
-                        "y1":
-                            float(bbox[1]),
-
-                        "x2":
-                            float(bbox[2]),
-
-                        "y2":
-                            float(bbox[3])
-
-                    }
-
-                })
-
-
-
-
-        # =====================================================
-        # TRACK SUMMARY
-        # =====================================================
-
-
-        unique_tracks = {}
-
-
-
-        for obj in tracked_objects:
-
-
-            tid = obj["track_id"]
-
-
-
-            if tid not in unique_tracks:
-
-
-                unique_tracks[tid] = {
-
-                    "track_id":
-                        tid,
-
-
-                    "class_name":
-                        obj["class_name"],
-
+                    "first_seen":
+                        observation[
+                            "timestamp"
+                        ],
 
                     "first_frame":
-                        obj["frame_id"],
+                        observation[
+                            "source_frame"
+                        ],
 
+                    # -----------------------------------------
+                    # Last appearance
+                    # -----------------------------------------
 
-                    "first_timestamp":
-                        obj["timestamp"],
-
+                    "last_seen":
+                        observation[
+                            "timestamp"
+                        ],
 
                     "last_frame":
-                        obj["frame_id"],
+                        observation[
+                            "source_frame"
+                        ],
 
+                    # -----------------------------------------
+                    # Detection count
+                    # -----------------------------------------
 
-                    "last_timestamp":
-                        obj["timestamp"],
-
-
-                    "observations":
-                        0
+                    "observations": 1
                 }
 
+            # -------------------------------------------------
+            # Existing object
+            # -------------------------------------------------
 
+            else:
 
+                unique_objects[
+                    identity_key
+                ][
+                    "last_seen"
+                ] = observation[
+                    "timestamp"
+                ]
 
-            unique_tracks[tid][
-                "last_frame"
-            ] = obj["frame_id"]
+                unique_objects[
+                    identity_key
+                ][
+                    "last_frame"
+                ] = observation[
+                    "source_frame"
+                ]
 
+                unique_objects[
+                    identity_key
+                ][
+                    "observations"
+                ] += 1
 
+        # =====================================================
+        # CONVERT TO LIST
+        # =====================================================
 
-            unique_tracks[tid][
-                "last_timestamp"
-            ] = obj["timestamp"]
+        unique_objects_list = list(
+            unique_objects.values()
+        )
 
+        # =====================================================
+        # CALCULATE DURATION
+        # =====================================================
 
+        for obj in unique_objects_list:
 
-            unique_tracks[tid][
-                "observations"
-            ] += 1
+            duration = (
+                obj["last_seen"]
+                -
+                obj["first_seen"]
+            )
 
+            obj["duration"] = round(
+                max(0.0, duration),
+                3
+            )
 
+        # =====================================================
+        # SORT BY FIRST APPEARANCE
+        # =====================================================
 
+        unique_objects_list.sort(
+            key=lambda obj: (
+                obj["first_seen"],
+                obj["object_id"]
+            )
+        )
+
+        # =====================================================
+        # FINAL JSON
+        # =====================================================
 
         output = {
 
-            "video_id":
-                video_id,
-
+            "video_id": video_id,
 
             "video_path":
                 str(video_path),
 
+            "fps": fps,
 
             "total_frames":
                 total_frames,
 
-
             "frames_with_tracks":
                 frames_with_tracks,
 
+            "unique_object_count":
+                len(unique_objects_list),
 
-            "unique_track_count":
-                len(unique_tracks),
+            "unique_objects":
+                unique_objects_list,
 
-
-            "tracks":
-                list(unique_tracks.values()),
-
+            # -------------------------------------------------
+            # Raw observations remain in backend.
+            #
+            # These are NOT displayed to user.
+            # They will later support:
+            #
+            # - event detection
+            # - evidence retrieval
+            # - temporal reasoning
+            # - knowledge graph
+            # -------------------------------------------------
 
             "observations":
                 tracked_objects
-
         }
 
-
+        # =====================================================
+        # SAVE TRACKING DATA
+        # =====================================================
 
         with open(
             output_path,
             "w"
         ) as file:
-
 
             json.dump(
                 output,
@@ -415,54 +545,146 @@ class ObjectTracker:
                 indent=2
             )
 
+        # =====================================================
+        # USER-FACING OUTPUT
+        # =====================================================
 
-
-        print(
-            f"[TRACKING] Frames processed: {total_frames}"
-        )
-
-
-        print(
-            f"[TRACKING] Frames with tracks: {frames_with_tracks}"
-        )
-
+        print()
 
         print(
-            f"[TRACKING] Unique tracks: {len(unique_tracks)}"
+            "=" * 70
         )
-
 
         print(
-            f"[TRACKING] Saved: {output_path}"
+            "UNIQUE OBJECT INVENTORY"
         )
 
+        print(
+            "=" * 70
+        )
+
+        print(
+            f"{'ID':<15}"
+            f"{'OBJECT':<15}"
+            f"{'FIRST SEEN':<15}"
+            f"{'LAST SEEN':<15}"
+            f"{'DURATION':<10}"
+        )
+
+        print(
+            "-" * 70
+        )
+
+        for obj in unique_objects_list:
+
+            print(
+                f"{obj['object_id']:<15}"
+                f"{obj['object']:<15}"
+                f"{obj['first_seen']:>8.2f}s"
+                f"{'':7}"
+                f"{obj['last_seen']:>8.2f}s"
+                f"{'':7}"
+                f"{obj['duration']:>7.2f}s"
+            )
+
+        print(
+            "-" * 70
+        )
+
+        print(
+            f"TOTAL UNIQUE OBJECTS: "
+            f"{len(unique_objects_list)}"
+        )
+
+        print(
+            "=" * 70
+        )
+
+        print()
+
+        # =====================================================
+        # BACKEND INFORMATION
+        # =====================================================
+
+        print(
+            f"[TRACKING] Frames processed : "
+            f"{total_frames}"
+        )
+
+        print(
+            f"[TRACKING] Frames with tracks: "
+            f"{frames_with_tracks}"
+        )
+
+        print(
+            f"[TRACKING] Raw observations : "
+            f"{len(tracked_objects)}"
+        )
+
+        print(
+            f"[TRACKING] Unique objects   : "
+            f"{len(unique_objects_list)}"
+        )
+
+        print(
+            f"[TRACKING] Saved            : "
+            f"{output_path}"
+        )
 
         return output_path
 
+    # =========================================================
+    # NORMALIZE CLASS NAME
+    # =========================================================
 
+    @staticmethod
+    def _normalize_class_name(
+        class_name
+    ):
 
+        # Convert:
+        #
+        # "cell phone" → "CELL_PHONE"
+        # "traffic light" → "TRAFFIC_LIGHT"
+        # "person" → "PERSON"
+
+        normalized = class_name.strip().lower()
+
+        normalized = re.sub(
+            r"[^a-z0-9]+",
+            "_",
+            normalized
+        )
+
+        normalized = normalized.strip(
+            "_"
+        )
+
+        return normalized.upper()
 
     # =========================================================
     # FPS READER
     # =========================================================
 
     @staticmethod
-    def _get_fps(video_path):
+    def _get_fps(
+        video_path
+    ):
 
         import cv2
-
 
         cap = cv2.VideoCapture(
             str(video_path)
         )
 
-
         fps = cap.get(
             cv2.CAP_PROP_FPS
         )
 
-
         cap.release()
 
-
-        return fps if fps > 0 else 30.0
+        return (
+            fps
+            if fps > 0
+            else 30.0
+        )

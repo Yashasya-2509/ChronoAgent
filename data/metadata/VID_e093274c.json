@@ -1,0 +1,14 @@
+{
+    "video_id": "VID_e093274c",
+    "source_path": "/Users/yashasyaaggarwal/Desktop/Minpro/data/dataset/UCF-Crime/Anomaly-Videos-Part-1/Arrest012_x264.mp4",
+    "filename": "Arrest012_x264.mp4",
+    "file_size_mb": 128.21,
+    "file_hash": "6f30a2d1ee3b283b1450ad1eea4fa7b5187323df34d4f26cb90cb3c607d61e16",
+    "fps": 30.0,
+    "frame_count": 16163,
+    "duration_seconds": 538.7666666666667,
+    "width": 320,
+    "height": 240,
+    "resolution": "320x240",
+    "created_at": "2026-09-22T15:51:42.651559"
+}

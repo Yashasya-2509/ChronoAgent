@@ -8,6 +8,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 import streamlit as st
 from app.query.query_engine import QueryEngine
+from app.pipeline.chrono_pipeline import ChronoPipeline
 
 # ==========================================
 # PAGE CONFIG
@@ -36,8 +37,9 @@ def indexed_videos():
     for memory_path in sorted(MEMORY_DIR.glob("*_event_memory.json")):
         video_id = memory_path.name.removesuffix("_event_memory.json")
         graph_path = GRAPH_DIR / f"{video_id}_graph.json"
-        video_path = VIDEO_DIR / f"{video_id}.mp4"
-        if graph_path.exists() and video_path.exists():
+        video_paths = list(VIDEO_DIR.glob(f"{video_id}.*"))
+        video_path = video_paths[0] if video_paths else None
+        if graph_path.exists() and video_path and video_path.exists():
             memory = load_json(memory_path)
             videos.append({
                 "id": video_id,
@@ -76,13 +78,24 @@ with st.sidebar:
         uploaded_path = upload_dir / uploaded_video.name
         uploaded_path.write_bytes(uploaded_video.getvalue())
         st.video(str(uploaded_path))
-        st.info(
-            "This upload is available for preview. It must be processed by the "
-            "pipeline before it can be queried."
-        )
+        if st.button("Process uploaded video", type="primary", use_container_width=True):
+            try:
+                with st.spinner("Processing video, detecting events, and building memory..."):
+                    metadata = ChronoPipeline().run(str(uploaded_path))
+                st.success(f"Processing complete: {metadata}")
+                st.rerun()
+            except Exception as error:
+                st.error(f"Video processing failed: {error}")
 
     if not videos:
         st.warning("No indexed videos are available yet.")
+        if not uploaded_video:
+            st.stop()
+        st.info("Process the uploaded video above, then select it here.")
+        st.stop()
+
+    if not video_by_id:
+        st.info("No completed video index is available yet. Process an upload above.")
         st.stop()
 
     selected_id = st.selectbox(

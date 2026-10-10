@@ -1,3 +1,4 @@
+
 import sqlite3
 from pathlib import Path
 
@@ -21,7 +22,14 @@ class ChronoDatabase:
 
         self.connection.row_factory = sqlite3.Row
 
+        # Enable foreign keys
+        self.connection.execute(
+            "PRAGMA foreign_keys = ON"
+        )
+
         self.create_tables()
+
+        self.migrate_tables()
 
     # =========================================================
     # CREATE TABLES
@@ -39,8 +47,11 @@ class ChronoDatabase:
             CREATE TABLE IF NOT EXISTS VIDEO (
                 video_id TEXT PRIMARY KEY,
                 filename TEXT NOT NULL,
+                format TEXT,
+                stored_path TEXT,
                 camera_id TEXT,
                 fps REAL,
+                frame_count INTEGER,
                 duration REAL,
                 width INTEGER,
                 height INTEGER,
@@ -63,6 +74,7 @@ class ChronoDatabase:
 
                 FOREIGN KEY(video_id)
                     REFERENCES VIDEO(video_id)
+                    ON DELETE CASCADE
             )
         """)
 
@@ -81,12 +93,73 @@ class ChronoDatabase:
                 is_keyframe INTEGER DEFAULT 0,
 
                 FOREIGN KEY(video_id)
-                    REFERENCES VIDEO(video_id),
+                    REFERENCES VIDEO(video_id)
+                    ON DELETE CASCADE,
 
                 FOREIGN KEY(scene_id)
                     REFERENCES SCENE(scene_id)
+                    ON DELETE SET NULL
             )
         """)
+
+        self.connection.commit()
+
+    # =========================================================
+    # DATABASE MIGRATION
+    # =========================================================
+
+    def migrate_tables(self):
+
+        """
+        Safely upgrade an existing ChronoAgent database.
+
+        This is important because your chrono.db may already
+        contain the old VIDEO table structure.
+        """
+
+        cursor = self.connection.cursor()
+
+        cursor.execute("""
+            PRAGMA table_info(VIDEO)
+        """)
+
+        existing_columns = {
+            row["name"]
+            for row in cursor.fetchall()
+        }
+
+        # -----------------------------------------------------
+        # Add FORMAT
+        # -----------------------------------------------------
+
+        if "format" not in existing_columns:
+
+            cursor.execute("""
+                ALTER TABLE VIDEO
+                ADD COLUMN format TEXT
+            """)
+
+        # -----------------------------------------------------
+        # Add STORED PATH
+        # -----------------------------------------------------
+
+        if "stored_path" not in existing_columns:
+
+            cursor.execute("""
+                ALTER TABLE VIDEO
+                ADD COLUMN stored_path TEXT
+            """)
+
+        # -----------------------------------------------------
+        # Add FRAME COUNT
+        # -----------------------------------------------------
+
+        if "frame_count" not in existing_columns:
+
+            cursor.execute("""
+                ALTER TABLE VIDEO
+                ADD COLUMN frame_count INTEGER
+            """)
 
         self.connection.commit()
 
@@ -94,7 +167,75 @@ class ChronoDatabase:
     # INSERT VIDEO
     # =========================================================
 
-    def insert_video(self, metadata):
+    def insert_video(
+        self,
+        metadata,
+        stored_path=None
+    ):
+
+        """
+        Insert or update a video metadata record.
+
+        Supports:
+            - dictionary
+            - VideoMetadata dataclass
+        """
+
+        # -----------------------------------------------------
+        # Convert VideoMetadata object to dictionary
+        # -----------------------------------------------------
+
+        if hasattr(metadata, "to_dict"):
+
+            metadata = metadata.to_dict()
+
+        elif hasattr(metadata, "__dict__"):
+
+            metadata = vars(metadata)
+
+        # -----------------------------------------------------
+        # Extract values
+        # -----------------------------------------------------
+
+        video_id = metadata["video_id"]
+
+        filename = metadata["filename"]
+
+        video_format = metadata.get(
+            "format"
+        )
+
+        camera_id = metadata.get(
+            "camera_id"
+        )
+
+        fps = metadata.get(
+            "fps"
+        )
+
+        frame_count = metadata.get(
+            "frame_count"
+        )
+
+        duration = metadata.get(
+            "duration"
+        )
+
+        width = metadata.get(
+            "width"
+        )
+
+        height = metadata.get(
+            "height"
+        )
+
+        created_at = metadata.get(
+            "created_at"
+        )
+
+        # -----------------------------------------------------
+        # Insert / update
+        # -----------------------------------------------------
 
         cursor = self.connection.cursor()
 
@@ -102,23 +243,31 @@ class ChronoDatabase:
             INSERT OR REPLACE INTO VIDEO (
                 video_id,
                 filename,
+                format,
+                stored_path,
                 camera_id,
                 fps,
+                frame_count,
                 duration,
                 width,
                 height,
                 created_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+            )
         """, (
-            metadata["video_id"],
-            metadata["filename"],
-            metadata.get("camera_id"),
-            metadata.get("fps"),
-            metadata.get("duration"),
-            metadata.get("width"),
-            metadata.get("height"),
-            metadata.get("created_at")
+            video_id,
+            filename,
+            video_format,
+            stored_path,
+            camera_id,
+            fps,
+            frame_count,
+            duration,
+            width,
+            height,
+            created_at
         ))
 
         self.connection.commit()
@@ -178,7 +327,12 @@ class ChronoDatabase:
             frame["frame_number"],
             frame["timestamp"],
             frame["path"],
-            int(frame.get("is_keyframe", False))
+            int(
+                frame.get(
+                    "is_keyframe",
+                    False
+                )
+            )
         ))
 
         self.connection.commit()
@@ -198,6 +352,22 @@ class ChronoDatabase:
         """, (video_id,))
 
         return cursor.fetchone()
+
+    # =========================================================
+    # GET ALL VIDEOS
+    # =========================================================
+
+    def get_all_videos(self):
+
+        cursor = self.connection.cursor()
+
+        cursor.execute("""
+            SELECT *
+            FROM VIDEO
+            ORDER BY created_at DESC
+        """)
+
+        return cursor.fetchall()
 
     # =========================================================
     # GET SCENES
@@ -259,6 +429,10 @@ class ChronoDatabase:
 
         cursor = self.connection.cursor()
 
+        # -----------------------------------------------------
+        # Scene count
+        # -----------------------------------------------------
+
         cursor.execute("""
             SELECT COUNT(*) AS count
             FROM SCENE
@@ -267,6 +441,10 @@ class ChronoDatabase:
 
         scene_count = cursor.fetchone()["count"]
 
+        # -----------------------------------------------------
+        # Frame count
+        # -----------------------------------------------------
+
         cursor.execute("""
             SELECT COUNT(*) AS count
             FROM FRAME
@@ -274,6 +452,10 @@ class ChronoDatabase:
         """, (video_id,))
 
         frame_count = cursor.fetchone()["count"]
+
+        # -----------------------------------------------------
+        # Keyframe count
+        # -----------------------------------------------------
 
         cursor.execute("""
             SELECT COUNT(*) AS count
@@ -291,10 +473,26 @@ class ChronoDatabase:
         }
 
     # =========================================================
+    # DELETE VIDEO
+    # =========================================================
+
+    def delete_video(self, video_id):
+
+        cursor = self.connection.cursor()
+
+        cursor.execute("""
+            DELETE FROM VIDEO
+            WHERE video_id = ?
+        """, (video_id,))
+
+        self.connection.commit()
+
+    # =========================================================
     # CLOSE
     # =========================================================
 
     def close(self):
 
         if self.connection:
+
             self.connection.close()
